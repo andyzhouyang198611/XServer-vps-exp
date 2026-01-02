@@ -18,6 +18,26 @@ jobs:
           EMAIL: ${{ secrets.EMAIL }}
           PASSWORD: ${{ secrets.PASSWORD }}
           PROXY_SERVER: ${{ secrets.PROXY_SERVER }}
+      - name: 📱 发送 Telegram 通知
+        # if: always() 确保脚本成功或失败都能收到消息
+        if: always() && secrets.TELEGRAM_BOT_TOKEN != '' && secrets.TELEGRAM_CHAT_ID != ''
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          # 直接构建固定格式的消息
+          MESSAGE="🐢 Xserver 运行通知：
+          📅 时间：$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')
+          📊 状态：${{ job.status == 'success' && '✅ 成功' || '❌ 失败' }}
+          
+          📋 详细日志：
+          🔗 ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          # 发送通知
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=${MESSAGE}" \
+            -d "parse_mode=Markdown"
       - uses: actions/upload-artifact@v4
         with:
           path: recording.webm
