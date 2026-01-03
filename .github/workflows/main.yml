@@ -53,7 +53,7 @@ jobs:
           fi
           
           # 直接构建固定格式的消息
-          MESSAGE="🐢 Xserver 运行通知：
+          MESSAGE="🐢 Xserver-VPS运行通知：
           📅 时间：$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')
           🖥️ 服务器：\`🇯🇵Xserver(VPS)\`
           📊 续期结果：${RENEWAL_STATUS}
