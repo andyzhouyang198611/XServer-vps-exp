@@ -41,32 +41,38 @@ try {
     try {
         // 等待表格加载
         await page.waitForSelector('table', { timeout: 10000 });
-        
-        oldExpiryTime = await page.evaluate(() => {
-            // 1. 找到所有表头 (th)
-            const ths = Array.from(document.querySelectorAll('th'));
-            // 2. 找到包含“利用期限”字样的表头索引
-            const targetThIndex = ths.findIndex(th => th.innerText.includes('利用期限'));
-            if (targetThIndex !== -1) {
-                // 3. 在对应的 td 单元格中找日期
-                const tds = Array.from(document.querySelectorAll('td'));
-                // 通常数据单元格的顺序与表头对应，或者直接在页面搜索日期正则
+        // 2. 使用循环重试（试 5 次，每次间隔 1 秒），给异步数据加载留出时间
+        for (let i = 0; i < 5; i++) {
+            oldExpiryTime = await page.evaluate(() => {
                 const dateRegex = /\d{4}[-/]\d{2}[-/]\d{2}/;
                 
-                // 策略 A：直接在页面所有单元格中找第一个符合格式的日期（VPS主页通常只有一个主日期）
-                for (let td of tds) {
-                    const match = td.innerText.match(dateRegex);
-                    if (match) return match[0];
+                // 找到所有表头，确定“利用期限”所在的列索引
+                const ths = Array.from(document.querySelectorAll('th'));
+                const colIndex = ths.findIndex(th => th.innerText.includes('利用期限'));
+                
+                if (colIndex !== -1) {
+                    // 找到对应的 td 单元格（通常数据在 th 同一行的后续或特定位置）
+                    // 策略：遍历所有 td，找到第一个符合日期格式且不等于今天的
+                    const tds = Array.from(document.querySelectorAll('td'));
+                    const today = new Date().toISOString().split('T')[0].replace(/-/g, '/');
+                    
+                    for (let td of tds) {
+                        const match = td.innerText.match(dateRegex);
+                        // 排除空值和今天（避开登录时间）
+                        if (match && !match[0].includes(today)) {
+                            return match[0];
+                        }
+                    }
                 }
-            }
+                return null;
+            });
 
-            // 策略 B：保底逻辑，搜索全文
-            const bodyMatch = document.body.innerText.match(/\d{4}[-/]\d{2}[-/]\d{2}/);
-            return bodyMatch ? bodyMatch[0] : "Not Found";
-        });
-        } catch (e) {
-        console.log("获取 VPS 到期时间失败:", e.message);
+            if (oldExpiryTime && oldExpiryTime !== "Unknown") break;
+            await new Promise(r => setTimeout(r, 1000)); // 等待 1 秒再试
         }
+    } catch (e) {
+        console.log("获取时间异常:", e.message);
+    }
     
     await page.locator('a[href^="/xapanel/xvps/server/detail?id="]').click()
     await page.locator('text=更新する').click()
