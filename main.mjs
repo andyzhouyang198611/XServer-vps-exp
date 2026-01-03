@@ -39,26 +39,34 @@ try {
 
     // 尝试获取旧的到期时间（根据页面结构可能需要调整选择器）
     try {
+        // 等待表格加载
+        await page.waitForSelector('table', { timeout: 10000 });
+        
         oldExpiryTime = await page.evaluate(() => {
-            // 方法 A：寻找包含“利用期限”字样的表格单元格的下一个兄弟节点
+            // 1. 找到所有表头 (th)
             const ths = Array.from(document.querySelectorAll('th'));
-            const expiryTh = ths.find(el => el.innerText.includes('利用期限'));
-            if (expiryTh && expiryTh.nextElementSibling) {
-                return expiryTh.nextElementSibling.innerText.trim();
+            // 2. 找到包含“利用期限”字样的表头索引
+            const targetThIndex = ths.findIndex(th => th.innerText.includes('利用期限'));
+            if (targetThIndex !== -1) {
+                // 3. 在对应的 td 单元格中找日期
+                const tds = Array.from(document.querySelectorAll('td'));
+                // 通常数据单元格的顺序与表头对应，或者直接在页面搜索日期正则
+                const dateRegex = /\d{4}[-/]\d{2}[-/]\d{2}/;
+                
+                // 策略 A：直接在页面所有单元格中找第一个符合格式的日期（VPS主页通常只有一个主日期）
+                for (let td of tds) {
+                    const match = td.innerText.match(dateRegex);
+                    if (match) return match[0];
+                }
             }
-            
-    // 方法 B：如果方法 A 失败，尝试匹配页面中第一个符合日期格式的文本（排除今天）
-            const matches = document.body.innerText.match(/\d{4}[-/]\d{2}[-/]\d{2}/g);
-            if (matches && matches.length > 0) {
-                // 通常第一个日期是到期日
-                return matches[0];
-            }
-            return "Unknown";
+
+            // 策略 B：保底逻辑，搜索全文
+            const bodyMatch = document.body.innerText.match(/\d{4}[-/]\d{2}[-/]\d{2}/);
+            return bodyMatch ? bodyMatch[0] : "Not Found";
         });
-        console.log("抓取到的到期时间为:", oldExpiryTime);
-    } catch (e) {
-        console.log("抓取到期时间失败");
-    }
+        } catch (e) {
+        console.log("获取 VPS 到期时间失败:", e.message);
+        }
     
     await page.locator('a[href^="/xapanel/xvps/server/detail?id="]').click()
     await page.locator('text=更新する').click()
@@ -98,8 +106,8 @@ ${renewalStatus === "Success" ? `🕡️新到期时间: \`已续期\`<br>` : ""
         console.error("❌ 生成 README.md 失败:", err);
     }
     
-    console.log("等待 10 秒确保视频录制完整...");
-    await setTimeout(10000);
+    console.log("等待 5 秒确保视频录制完整...");
+    await setTimeout(5000);
     await recorder.stop()
     await browser.close()
 }
