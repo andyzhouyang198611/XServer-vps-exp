@@ -21,14 +21,12 @@ jobs:
           PASSWORD: ${{ secrets.PASSWORD }}
           PROXY_SERVER: ${{ secrets.PROXY_SERVER }}
 
-      # --- 新增：将修改后的 README.md 提交并推送到仓库 ---
       - name: 提交并更新 README
-        if: always() # 确保即使脚本出错也能尝试更新报告（如果有变动）
+        if: always()
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add README.md
-          # 检查是否有变化，有变化才提交
           if ! git diff --cached --quiet; then
             git commit -m "Update README with renewal status [skip ci]"
             git push
@@ -43,13 +41,26 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
+          # --- 从 README.md 提取信息 (参考自 mainrenrw.py 逻辑) ---
+          if [ -f "README.md" ]; then
+            # 提取续期结果图标和文字
+            RENEWAL_STATUS=$(grep "📊续期结果：" README.md | sed 's/.*📊续期结果：\([^<]*\).*/\1/' | sed 's/<br>//')
+            # 提取旧到期时间
+            OLD_DATE=$(grep "🕛️旧到期时间:" README.md | sed 's/.*🕛️旧到期时间: `\([^`]*\)`.*/\1/')
+          else
+            RENEWAL_STATUS="❓未知 (文件不存在)"
+            OLD_DATE="N/A"
+          fi
+          
           # 直接构建固定格式的消息
           MESSAGE="🐢 Xserver 运行通知：
           📅 时间：$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')
-          📊 状态：${{ job.status == 'success' && '✅ 成功' || '❌ 失败' }}
+          🖥️ 服务器：\`🇯🇵Xserver(VPS)\`
+          📊 续期结果：${RENEWAL_STATUS}
+          🕛️ 旧到期时间：\`${OLD_DATE}\`
           
           📋 详细日志：
-          🔗 ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          🔗 [点击查看运行日志](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
 
           # 发送通知
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
