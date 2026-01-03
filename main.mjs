@@ -98,6 +98,8 @@ ${renewalStatus === "Success" ? `🕡️新到期时间: \`已续期\`<br>` : ""
         console.error("❌ 生成 README.md 失败:", err);
     }
     
+    console.log("等待 10 秒确保视频录制完整...");
+    await setTimeout(10000);
     await recorder.stop()
     await browser.close()
 }
