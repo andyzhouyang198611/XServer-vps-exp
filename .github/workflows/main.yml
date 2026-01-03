@@ -8,6 +8,8 @@ jobs:
   job:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions: # 关键：必须给 Actions 写入权限
+      contents: write
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v4
@@ -18,6 +20,22 @@ jobs:
           EMAIL: ${{ secrets.EMAIL }}
           PASSWORD: ${{ secrets.PASSWORD }}
           PROXY_SERVER: ${{ secrets.PROXY_SERVER }}
+
+      # --- 新增：将修改后的 README.md 提交并推送到仓库 ---
+      - name: 提交并更新 README
+        if: always() # 确保即使脚本出错也能尝试更新报告（如果有变动）
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          # 检查是否有变化，有变化才提交
+          if ! git diff --cached --quiet; then
+            git commit -m "Update README with renewal status [skip ci]"
+            git push
+          else
+            echo "README 内容无变化，跳过提交"
+          fi
+          
       - name: 📱 发送 Telegram 通知
         # 修复后的 if 语法：在 if 内部引用 secrets 需要包裹在 ${{ }} 中
         if: always()
