@@ -39,39 +39,54 @@ try {
 
     // 尝试获取旧的到期时间（根据页面结构可能需要调整选择器）
     try {
-        // 等待表格加载
-        await page.waitForSelector('table', { timeout: 10000 });
-        // 2. 使用循环重试（试 5 次，每次间隔 1 秒），给异步数据加载留出时间
-        for (let i = 0; i < 5; i++) {
-            oldExpiryTime = await page.evaluate(() => {
-                const dateRegex = /\d{4}[-/]\d{2}[-/]\d{2}/;
-                
-                // 找到所有表头，确定“利用期限”所在的列索引
-                const ths = Array.from(document.querySelectorAll('th'));
-                const colIndex = ths.findIndex(th => th.innerText.includes('利用期限'));
-                
-                if (colIndex !== -1) {
-                    // 找到对应的 td 单元格（通常数据在 th 同一行的后续或特定位置）
-                    // 策略：遍历所有 td，找到第一个符合日期格式且不等于今天的
-                    const tds = Array.from(document.querySelectorAll('td'));
-                    const today = new Date().toISOString().split('T')[0].replace(/-/g, '/');
-                    
-                    for (let td of tds) {
-                        const match = td.innerText.match(dateRegex);
-                        // 排除空值和今天（避开登录时间）
-                        if (match && !match[0].includes(today)) {
-                            return match[0];
-                        }
-                    }
-                }
-                return null;
-            });
+        // 1. 等待 5 秒，确保所有异步数据（包括 iframe）都加载完
+        await setTimeout(5000);
 
-            if (oldExpiryTime && oldExpiryTime !== "Unknown") break;
-            await new Promise(r => setTimeout(r, 1000)); // 等待 1 秒再试
+        oldExpiryTime = await page.evaluate(() => {
+            // 定义日期正则 (支持 2026/01/05 或 2026-01-05)
+            const dateRegex = /\d{4}[-/]\d{2}[-/]\d{2}/;
+            
+            // 策略 A：深度搜索所有包含日期的元素
+            const elements = document.querySelectorAll('*');
+            const dateNodes = [];
+            
+            for (let el of elements) {
+                // 只看没有子节点的纯文本节点，或者特定的单元格
+                if (el.children.length === 0 && dateRegex.test(el.innerText)) {
+                    dateNodes.push(el.innerText.match(dateRegex)[0]);
+                }
+            }
+
+            // 策略 B：如果 A 没找到，搜索全网页可见文本
+            if (dateNodes.length === 0) {
+                const bodyText = document.body.innerText;
+                const matches = bodyText.match(/\d{4}[-/]\d{2}[-/]\d{2}/g);
+                if (matches) return matches[matches.length - 1]; // 通常最后一个日期是到期日
+            }
+
+            // 策略 C：排除掉“今天”的日期（避免抓到登录时间）
+            const today = new Date().toISOString().split('T')[0].replace(/-/g, '/');
+            const finalDate = dateNodes.find(d => !d.includes(today));
+
+            return finalDate || dateNodes[0] || "Not Found";
+        });
+
+        // 策略 D：如果还是 Not Found，尝试进入所有的 iframe 搜索 (针对 VPS 面板常见结构)
+        if (oldExpiryTime === "Not Found") {
+            const frames = page.frames();
+            for (const frame of frames) {
+                const frameDate = await frame.evaluate(() => {
+                    const match = document.body.innerText.match(/\d{4}[-/]\d{2}[-/]\d{2}/);
+                    return match ? match[0] : null;
+                }).catch(() => null);
+                if (frameDate) {
+                    oldExpiryTime = frameDate;
+                    break;
+                }
+            }
         }
     } catch (e) {
-        console.log("获取时间异常:", e.message);
+        console.log("抓取过程发生异常:", e.message);
     }
     
     await page.locator('a[href^="/xapanel/xvps/server/detail?id="]').click()
