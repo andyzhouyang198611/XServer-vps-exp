@@ -40,11 +40,22 @@ try {
     // 尝试获取旧的到期时间（根据页面结构可能需要调整选择器）
     try {
         oldExpiryTime = await page.evaluate(() => {
-            const bodyText = document.body.innerText;
-            // 匹配页面中形如 2025-01-01 或 2025/01/01 的日期
-            const match = bodyText.match(/(\d{4}[-/]\d{2}[-/]\d{2})/);
-            return match ? match[0] : "Unknown";
+            // 方法 A：寻找包含“利用期限”字样的表格单元格的下一个兄弟节点
+            const ths = Array.from(document.querySelectorAll('th'));
+            const expiryTh = ths.find(el => el.innerText.includes('利用期限'));
+            if (expiryTh && expiryTh.nextElementSibling) {
+                return expiryTh.nextElementSibling.innerText.trim();
+            }
+            
+    // 方法 B：如果方法 A 失败，尝试匹配页面中第一个符合日期格式的文本（排除今天）
+            const matches = document.body.innerText.match(/\d{4}[-/]\d{2}[-/]\d{2}/g);
+            if (matches && matches.length > 0) {
+                // 通常第一个日期是到期日
+                return matches[0];
+            }
+            return "Unknown";
         });
+        console.log("抓取到的到期时间为:", oldExpiryTime);
     } catch (e) {
         console.log("抓取到期时间失败");
     }
