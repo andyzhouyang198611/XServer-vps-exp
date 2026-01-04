@@ -37,37 +37,14 @@ try {
     await page.locator('text=ログインする').click()
     await page.waitForNavigation({ waitUntil: 'networkidle2' })
 
-    // 尝试获取旧的到期时间（根据页面结构可能需要调整选择器）
+    // 2. [优化点] 尝试抓取日期，但不让它阻塞主流程
     try {
-        // 1. 显式等待包含“利用期限”字样的元素出现，最长等 10 秒
-        // 这解决了页面加载慢的问题
-        await page.waitForFunction(
-            () => document.body.innerText.includes('利用期限'),
-            { timeout: 10000 }
-        ).catch(() => console.log("未发现‘利用期限’字样"));
-
-        // 2. 采用 Python 版的正则思路，直接在全页查找所有符合 YYYY-MM-DD 的文本
         oldExpiryTime = await page.evaluate(() => {
-            const dateRegex = /\d{4}[-/]\d{2}[-/]\d{2}/g;
-            const bodyText = document.body.innerText;
-            const matches = bodyText.match(dateRegex);
-
-            if (matches && matches.length > 0) {
-                // 过滤逻辑：
-                // A. 排除掉今天 (脚本运行日期)
-                // B. 排除掉 1970 等异常日期
-                const today = new Date().toISOString().split('T')[0];
-                const validDates = matches.filter(d => !d.includes(today.replace(/-/g, '/')) && !d.includes(today));
-                
-                // 返回找到的第一个有效日期（通常就是利用期限）
-                return validDates.length > 0 ? validDates[0] : matches[0];
-            }
-            return "Not Found";
+            const matches = document.body.innerText.match(/\d{4}[-/]\d{2}[-/]\d{2}/g);
+            return matches ? matches[0] : "Not Found";
         });
-
-        console.log("抓取结果:", oldExpiryTime);
-    } catch (e) {
-        console.log("抓取超时，页面可能未完全加载");
+    } catch (dateErr) {
+        console.log("日期抓取跳过:", dateErr.message);
     }
     
     await page.locator('a[href^="/xapanel/xvps/server/detail?id="]').click()
